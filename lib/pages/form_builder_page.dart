@@ -17,17 +17,11 @@ class FormBuilderPage extends StatefulWidget {
 class _FormBuilderPageState extends State<FormBuilderPage> {
   // Metadata controllers
   final _nameController = TextEditingController();
-  final _codeController = TextEditingController();
-  final _priceController = TextEditingController();
   final _descController = TextEditingController();
-  final _notesController = TextEditingController();
-  final _retentionYearsController = TextEditingController(text: '0');
-  final _retentionMonthsController = TextEditingController(text: '1');
+  final _connectedIdController = TextEditingController();
 
   bool _isActive = false;
   int _activeValue = 0;
-  bool _isPublic = false;
-  int _publicValue = 0;
 
   // Form fields
   final List<FormFieldModel> _fields = [];
@@ -54,26 +48,17 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
   @override
   void dispose() {
     _nameController.dispose();
-    _codeController.dispose();
-    _priceController.dispose();
     _descController.dispose();
-    _notesController.dispose();
-    _retentionYearsController.dispose();
-    _retentionMonthsController.dispose();
+    _connectedIdController.dispose();
     super.dispose();
   }
 
   FormDefinitionModel _buildDefinition() {
     return FormDefinitionModel(
       name: _nameController.text,
-      code: _codeController.text,
-      price: _priceController.text,
       description: _descController.text,
-      notes: _notesController.text,
+      connectedId: _connectedIdController.text,
       isActive: _isActive,
-      isPublic: _isPublic,
-      retentionYears: int.tryParse(_retentionYearsController.text) ?? 0,
-      retentionMonths: int.tryParse(_retentionMonthsController.text) ?? 1,
       fields: _fields,
     );
   }
@@ -186,16 +171,10 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
   void _resetForm() {
     setState(() {
       _nameController.clear();
-      _codeController.clear();
-      _priceController.clear();
       _descController.clear();
-      _notesController.clear();
-      _retentionYearsController.text = '0';
-      _retentionMonthsController.text = '1';
+      _connectedIdController.clear();
       _isActive = false;
       _activeValue = 0;
-      _isPublic = false;
-      _publicValue = 0;
       _fields.clear();
       _fieldKeys.clear();
     });
@@ -280,22 +259,14 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _metaField('Name of Form', _nameController),
-        _metaField('Form Code', _codeController),
-        _metaField('Form Price', _priceController, keyboardType: TextInputType.number),
-        _metaField('Description', _descController),
-        _metaField('Notes', _notesController),
-        const SizedBox(height: 24),
-        _buildRetentionRow(),
+        _metaField('Name', _nameController),
+        _metaField('Connected ID', _connectedIdController, hint: 'Application ID using this form'),
+        _textAreaField('Description', _descController),
       ],
     );
   }
 
-  Widget _metaField(
-    String label,
-    TextEditingController controller, {
-    TextInputType? keyboardType,
-  }) {
+  Widget _metaField(String label, TextEditingController controller, {String? hint}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -308,10 +279,11 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
           const SizedBox(height: 4),
           TextField(
             controller: controller,
-            keyboardType: keyboardType,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               isDense: true,
+              hintText: hint,
+              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
@@ -328,47 +300,36 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
     );
   }
 
-  Widget _buildRetentionRow() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Set form retention period',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: _retentionField('Year', _retentionYearsController)),
-            const SizedBox(width: 16),
-            Expanded(child: _retentionField('Month', _retentionMonthsController)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _retentionField(String label, TextEditingController controller) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+  Widget _textAreaField(String label, TextEditingController controller) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 4),
+          TextField(
+            controller: controller,
+            maxLines: 5,
+            minLines: 5,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -377,8 +338,6 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildActiveRadio(),
-        const SizedBox(height: 20),
-        _buildPublicRadio(),
       ],
     );
   }
@@ -427,50 +386,6 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
     );
   }
 
-  Widget _buildPublicRadio() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Set this form to public?',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
-            ),
-            const SizedBox(width: 6),
-            Icon(Icons.info_outline, size: 16, color: Colors.grey[500]),
-          ],
-        ),
-        RadioMenuButton<int>(
-          value: 0,
-          groupValue: _publicValue,
-          onChanged: (v) => setState(() {
-            _isPublic = false;
-            _publicValue = 0;
-          }),
-          child: Text('No', style: Theme.of(context).textTheme.bodySmall),
-        ),
-        RadioMenuButton<int>(
-          value: 1,
-          groupValue: _publicValue,
-          onChanged: (v) => setState(() {
-            _isPublic = true;
-            _publicValue = 1;
-          }),
-          child: Row(
-            children: [
-              Text('Yes, ', style: Theme.of(context).textTheme.bodySmall),
-              Text(
-                'make this form public.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.red),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   // ────────────────────── Form Builder Section ─────────────────
 
   Widget _buildFormBuilderSection() {
@@ -498,7 +413,61 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
           ],
         ),
         const SizedBox(height: 32),
+        _buildFormActions(),
+        const SizedBox(height: 40),
       ],
+    );
+  }
+
+  Widget _buildFormActions() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        OutlinedButton(
+          onPressed: _resetForm,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF374151),
+            side: const BorderSide(color: Color(0xFFD1D5DB)),
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: const Text('Cancel'),
+        ),
+        const SizedBox(width: 16),
+        ElevatedButton(
+          onPressed: _submitForm,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1E3A8A),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: const Text('Submit Form'),
+        ),
+      ],
+    );
+  }
+
+  void _submitForm() {
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a form name.')),
+      );
+      return;
+    }
+    if (_fields.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add at least one field.')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Form submitted successfully!'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 3),
+      ),
     );
   }
 

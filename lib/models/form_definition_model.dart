@@ -3,43 +3,27 @@ import 'form_field_model.dart';
 
 class FormDefinitionModel {
   String name;
-  String code;
-  String price;
   String description;
-  String notes;
+  String connectedId;
   bool isActive;
-  bool isPublic;
-  int retentionYears;
-  int retentionMonths;
   List<FormFieldModel> fields;
 
   FormDefinitionModel({
     this.name = '',
-    this.code = '',
-    this.price = '',
     this.description = '',
-    this.notes = '',
+    this.connectedId = '',
     this.isActive = false,
-    this.isPublic = false,
-    this.retentionYears = 0,
-    this.retentionMonths = 1,
     List<FormFieldModel>? fields,
   }) : fields = fields ?? [];
 
   Map<String, dynamic> toJson() {
     return {
-      'form_name': name,
-      'form_code': code,
-      'form_price': price,
+      'scheme_name': 'forms_builder',
+      'name': name,
       'description': description,
-      'notes': notes,
-      'is_active': isActive,
-      'is_public': isPublic,
-      'retention': {
-        'years': retentionYears,
-        'months': retentionMonths,
-      },
-      'fields': fields.map((f) => f.toJson()).toList(),
+      'connected_id': connectedId.trim().isEmpty ? null : connectedId.trim(),
+      'status': isActive ? 'active' : 'inactive',
+      'builder': fields.map((f) => f.toJson()).toList(),
     };
   }
 
