@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import '../models/form_field_model.dart';
 import '../models/form_definition_model.dart';
@@ -44,6 +45,12 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
     FieldType.goodsAndServices,
     FieldType.datepicker,
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _connectedIdController.text = _uuid.v4();
+  }
 
   @override
   void dispose() {
@@ -172,7 +179,7 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
     setState(() {
       _nameController.clear();
       _descController.clear();
-      _connectedIdController.clear();
+      _connectedIdController.text = _uuid.v4();
       _isActive = false;
       _activeValue = 0;
       _fields.clear();
@@ -260,9 +267,84 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _metaField('Name', _nameController),
-        _metaField('Connected ID', _connectedIdController, hint: 'Application ID using this form'),
+        _buildConnectedIdField(),
         _textAreaField('Description', _descController),
       ],
+    );
+  }
+
+  Widget _buildConnectedIdField() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Connected ID',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _connectedIdController,
+                  readOnly: true,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Auto-generated UUID',
+                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Tooltip(
+                message: 'Copy ID',
+                child: IconButton(
+                  icon: const Icon(Icons.copy, size: 18),
+                  color: const Color(0xFF1E3A8A),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: _connectedIdController.text));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Connected ID copied to clipboard'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Tooltip(
+                message: 'Regenerate ID',
+                child: IconButton(
+                  icon: const Icon(Icons.refresh, size: 18),
+                  color: const Color(0xFF1E3A8A),
+                  onPressed: () {
+                    setState(() => _connectedIdController.text = _uuid.v4());
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Use this ID in your other application to link to this form.',
+            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+          ),
+        ],
+      ),
     );
   }
 
@@ -372,15 +454,7 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
             _isActive = true;
             _activeValue = 1;
           }),
-          child: Row(
-            children: [
-              Text('Yes, ', style: Theme.of(context).textTheme.bodySmall),
-              Text(
-                'deploy this form template live.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.red),
-              ),
-            ],
-          ),
+          child: Text('Yes', style: Theme.of(context).textTheme.bodySmall),
         ),
       ],
     );
@@ -434,6 +508,18 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
           child: const Text('Cancel'),
         ),
         const SizedBox(width: 16),
+        OutlinedButton.icon(
+          onPressed: _showPreviewDialog,
+          icon: const Icon(Icons.visibility_outlined, size: 18),
+          label: const Text('Preview'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF1E3A8A),
+            side: const BorderSide(color: Color(0xFF1E3A8A)),
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+        const SizedBox(width: 16),
         ElevatedButton(
           onPressed: _submitForm,
           style: ElevatedButton.styleFrom(
@@ -446,6 +532,81 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
           child: const Text('Submit Form'),
         ),
       ],
+    );
+  }
+
+  void _showPreviewDialog() {
+    final formName = _nameController.text.trim().isNotEmpty
+        ? _nameController.text.trim()
+        : 'Untitled Form';
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 700),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1E3A8A),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.visibility_outlined, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        formName,
+                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: _fields.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(40),
+                        child: Center(
+                          child: Text(
+                            'No fields added yet.',
+                            style: TextStyle(color: Colors.grey, fontSize: 14),
+                          ),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: _fields.map(_buildFieldPreview).toList(),
+                        ),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
