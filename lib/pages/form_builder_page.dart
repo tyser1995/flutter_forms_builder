@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../utils/image_picker_helper.dart';
 import 'package:uuid/uuid.dart';
 import '../models/form_field_model.dart';
 import '../models/form_definition_model.dart';
@@ -20,6 +21,10 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
   final _nameController = TextEditingController();
   final _descController = TextEditingController();
   final _connectedIdController = TextEditingController();
+
+  // Scroll controllers
+  final _canvasScrollController = ScrollController();
+  final _paletteScrollController = ScrollController();
 
   bool _isActive = false;
   int _activeValue = 0;
@@ -57,6 +62,8 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
     _nameController.dispose();
     _descController.dispose();
     _connectedIdController.dispose();
+    _canvasScrollController.dispose();
+    _paletteScrollController.dispose();
     super.dispose();
   }
 
@@ -541,71 +548,9 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
         : 'Untitled Form';
     showDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 700),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1E3A8A),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.visibility_outlined, color: Colors.white, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        formName,
-                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-              ),
-              Flexible(
-                child: _fields.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(40),
-                        child: Center(
-                          child: Text(
-                            'No fields added yet.',
-                            style: TextStyle(color: Colors.grey, fontSize: 14),
-                          ),
-                        ),
-                      )
-                    : SingleChildScrollView(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: _fields.map(_buildFieldPreview).toList(),
-                        ),
-                      ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('Close'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+      builder: (ctx) => _PreviewDialog(
+        formName: formName,
+        fields: List.unmodifiable(_fields),
       ),
     );
   }
@@ -648,7 +593,20 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
             ),
           ),
           const SizedBox(height: 8),
-          ..._palette.map(_buildPaletteItem),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 520),
+            child: Scrollbar(
+              controller: _paletteScrollController,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _paletteScrollController,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _palette.map(_buildPaletteItem).toList(),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -720,7 +678,7 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
         final isHovering = candidateData.isNotEmpty;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          constraints: const BoxConstraints(minHeight: 500),
+          constraints: const BoxConstraints(minHeight: 500, maxHeight: 600),
           decoration: BoxDecoration(
             color: isHovering ? const Color(0xFF1E3A8A).withValues(alpha: 0.05) : Colors.grey[100],
             borderRadius: BorderRadius.circular(8),
@@ -746,21 +704,26 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
                     ),
                   ),
                 )
-              : Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: ReorderableListView.builder(
-                    buildDefaultDragHandles: false,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    onReorder: _reorder,
-                    itemCount: _fields.length,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        key: ValueKey(_fieldKeys[index]),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        child: _buildFieldRow(index),
-                      );
-                    },
+              : Scrollbar(
+                  controller: _canvasScrollController,
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _canvasScrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: ReorderableListView.builder(
+                      buildDefaultDragHandles: false,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      onReorder: _reorder,
+                      itemCount: _fields.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          key: ValueKey(_fieldKeys[index]),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: _buildFieldRow(index),
+                        );
+                      },
+                    ),
                   ),
                 ),
         );
@@ -1096,4 +1059,631 @@ class _FormBuilderPageState extends State<FormBuilderPage> {
       ),
     );
   }
+}
+
+// ────────────────────── Preview Dialog ───────────────────────
+
+class _PreviewDialog extends StatefulWidget {
+  final String formName;
+  final List<FormFieldModel> fields;
+
+  const _PreviewDialog({required this.formName, required this.fields});
+
+  @override
+  State<_PreviewDialog> createState() => _PreviewDialogState();
+}
+
+class _PreviewDialogState extends State<_PreviewDialog> {
+  final Map<String, TextEditingController> _textControllers = {};
+  final Map<String, int?> _radioValues = {};
+  final Map<String, bool> _checkboxValues = {};
+  final Map<String, String?> _dropdownValues = {};
+  final Map<String, DateTime?> _dateValues = {};
+  final Map<String, Map<String, bool>> _goodsValues = {};
+  final Map<String, Uint8List?> _imageBytes = {};
+  final Map<String, String?> _imageNames = {};
+
+  @override
+  void initState() {
+    super.initState();
+    for (final field in widget.fields) {
+      switch (field.type) {
+        case FieldType.text:
+        case FieldType.multiline:
+        case FieldType.number:
+          _textControllers[field.id] = TextEditingController();
+        case FieldType.radioButton:
+          _radioValues[field.id] = null;
+        case FieldType.checkbox:
+          _checkboxValues[field.id] = false;
+        case FieldType.dropdown:
+          _dropdownValues[field.id] = null;
+        case FieldType.datepicker:
+          _dateValues[field.id] = null;
+        case FieldType.goodsAndServices:
+          _goodsValues[field.id] = {for (final opt in field.options) opt: false};
+        case FieldType.imageUpload:
+        case FieldType.imageUploadCapture:
+          _imageBytes[field.id] = null;
+          _imageNames[field.id] = null;
+        default:
+          break;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _textControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget _fieldLabel(FormFieldModel field) {
+    return Row(
+      children: [
+        Text(field.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        if (field.required)
+          const Text(' *', style: TextStyle(color: Colors.red, fontSize: 13)),
+      ],
+    );
+  }
+
+  Widget _buildInteractiveField(FormFieldModel field) {
+    switch (field.type) {
+      case FieldType.label:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(field.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        );
+
+      case FieldType.text:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel(field),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _textControllers[field.id],
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Enter ${field.label}',
+                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+            ],
+          ),
+        );
+
+      case FieldType.multiline:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel(field),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _textControllers[field.id],
+                maxLines: 4,
+                minLines: 3,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Enter multi-line text...',
+                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+            ],
+          ),
+        );
+
+      case FieldType.number:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel(field),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _textControllers[field.id],
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: '0',
+                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+            ],
+          ),
+        );
+
+      case FieldType.radioButton:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel(field),
+              const SizedBox(height: 4),
+              ...field.options.asMap().entries.map(
+                (e) => InkWell(
+                  onTap: () => setState(() => _radioValues[field.id] = e.key),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Radio<int>(
+                          value: e.key,
+                          groupValue: _radioValues[field.id],
+                          onChanged: (v) => setState(() => _radioValues[field.id] = v),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(e.value, style: const TextStyle(fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+      case FieldType.checkbox:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: InkWell(
+            onTap: () => setState(
+              () => _checkboxValues[field.id] = !(_checkboxValues[field.id] ?? false),
+            ),
+            borderRadius: BorderRadius.circular(4),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: _checkboxValues[field.id] ?? false,
+                  onChanged: (v) => setState(() => _checkboxValues[field.id] = v ?? false),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: 4),
+                Expanded(child: Text(field.label, style: const TextStyle(fontSize: 13))),
+                if (field.required)
+                  const Text(' *', style: TextStyle(color: Colors.red, fontSize: 13)),
+              ],
+            ),
+          ),
+        );
+
+      case FieldType.dropdown:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel(field),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: _dropdownValues[field.id],
+                isExpanded: true,
+                hint: Text('Select...', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                items: field.options
+                    .map(
+                      (opt) => DropdownMenuItem(
+                        value: opt,
+                        child: Text(opt, style: const TextStyle(fontSize: 13)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _dropdownValues[field.id] = v),
+              ),
+            ],
+          ),
+        );
+
+      case FieldType.imageUpload:
+      case FieldType.imageUploadCapture:
+        final hasImage = _imageBytes[field.id] != null;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel(field),
+              const SizedBox(height: 6),
+              if (hasImage) ...[
+                Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.memory(
+                        _imageBytes[field.id]!,
+                        height: 120,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: InkWell(
+                        onTap: () => setState(() {
+                          _imageBytes[field.id] = null;
+                          _imageNames[field.id] = null;
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Icon(Icons.close, size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+              ],
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final picked = await pickImage();
+                      if (picked != null) {
+                        setState(() {
+                          _imageBytes[field.id] = picked.bytes;
+                          _imageNames[field.id] = picked.name;
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.upload, size: 16),
+                    label: Text(hasImage ? 'Replace' : 'Upload', style: const TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      backgroundColor: const Color(0xFF1E3A8A),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _imageNames[field.id] ?? 'No file selected',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+
+      case FieldType.wetSignature:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel(field),
+              const SizedBox(height: 6),
+              _SignaturePad(key: ValueKey('sig_${field.id}')),
+            ],
+          ),
+        );
+
+      case FieldType.goodsAndServices:
+        final goods = _goodsValues[field.id] ?? {};
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel(field),
+              const SizedBox(height: 4),
+              ...field.options.map(
+                (item) => InkWell(
+                  onTap: () => setState(
+                    () => _goodsValues[field.id]![item] = !(goods[item] ?? false),
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: goods[item] ?? false,
+                          onChanged: (v) =>
+                              setState(() => _goodsValues[field.id]![item] = v ?? false),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(child: Text(item, style: const TextStyle(fontSize: 13))),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+      case FieldType.datepicker:
+        final date = _dateValues[field.id];
+        final dateText = date != null
+            ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
+            : '';
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel(field),
+              const SizedBox(height: 6),
+              InkWell(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: date ?? DateTime.now(),
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) setState(() => _dateValues[field.id] = picked);
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  height: 42,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          dateText.isEmpty ? 'YYYY-MM-DD' : dateText,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: dateText.isEmpty ? Colors.grey[400] : Colors.black87,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.calendar_month_outlined, size: 18, color: Colors.grey[600]),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 700),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E3A8A),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.visibility_outlined, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.formName,
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: widget.fields.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(40),
+                      child: Center(
+                        child: Text(
+                          'No fields added yet.',
+                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                        ),
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: widget.fields.map(_buildInteractiveField).toList(),
+                      ),
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ────────────────────── Signature Pad ────────────────────────
+
+class _SignaturePad extends StatefulWidget {
+  const _SignaturePad({super.key});
+
+  @override
+  State<_SignaturePad> createState() => _SignaturePadState();
+}
+
+class _SignaturePadState extends State<_SignaturePad> {
+  final List<List<Offset>> _strokes = [];
+  List<Offset>? _currentStroke;
+
+  void _startStroke(Offset position) {
+    setState(() {
+      _currentStroke = [position];
+      _strokes.add(_currentStroke!);
+    });
+  }
+
+  void _addPoint(Offset position) {
+    if (_currentStroke == null) return;
+    setState(() => _currentStroke!.add(position));
+  }
+
+  void _endStroke() => _currentStroke = null;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        MouseRegion(
+          cursor: SystemMouseCursors.precise,
+          child: Container(
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: Listener(
+              onPointerDown: (e) => _startStroke(e.localPosition),
+              onPointerMove: (e) => _addPoint(e.localPosition),
+              onPointerUp: (_) => _endStroke(),
+              onPointerCancel: (_) => _endStroke(),
+              child: SizedBox.expand(
+                child: CustomPaint(
+                  painter: _SignaturePainter(_strokes),
+                  child: _strokes.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.draw_outlined, size: 24, color: Colors.grey[400]),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Draw your signature here',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[400],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => setState(() {
+              _strokes.clear();
+              _currentStroke = null;
+            }),
+            icon: const Icon(Icons.clear, size: 14),
+            label: const Text('Clear', style: TextStyle(fontSize: 12)),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey[600],
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SignaturePainter extends CustomPainter {
+  final List<List<Offset>> strokes;
+
+  const _SignaturePainter(this.strokes);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black87
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+
+    for (final stroke in strokes) {
+      if (stroke.isEmpty) continue;
+      if (stroke.length == 1) {
+        canvas.drawCircle(stroke.first, 1.5, paint);
+        continue;
+      }
+      if (stroke.length == 2) {
+        canvas.drawLine(stroke[0], stroke[1], paint);
+        continue;
+      }
+      // Smooth curve using quadratic Bézier between midpoints
+      final path = Path()..moveTo(stroke[0].dx, stroke[0].dy);
+      for (int i = 0; i < stroke.length - 1; i++) {
+        final mid = Offset(
+          (stroke[i].dx + stroke[i + 1].dx) / 2,
+          (stroke[i].dy + stroke[i + 1].dy) / 2,
+        );
+        path.quadraticBezierTo(stroke[i].dx, stroke[i].dy, mid.dx, mid.dy);
+      }
+      path.lineTo(stroke.last.dx, stroke.last.dy);
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SignaturePainter old) => old.strokes != strokes;
 }
